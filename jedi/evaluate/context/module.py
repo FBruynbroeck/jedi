@@ -135,28 +135,42 @@ class ModuleContext(use_metaclass(CachedMetaClass, TreeContext)):
         else:
             return self.py__name__()
 
+    def ns_path(self, name, init_path):
+        res = []
+        while True:
+            if os.path.isfile(init_path):
+                with open(init_path, 'rb') as f:
+                    content = python_bytes_to_unicode(f.read(), errors='replace')
+                    # these are strings that need to be used for namespace packages,
+                    # the first one is ``pkgutil``, the second ``pkg_resources``.
+                    options = ('declare_namespace(__name__)', 'extend_path(__path__')
+                    if options[0] in content or options[1] in content:
+                        name = os.path.basename(os.path.dirname(os.path.abspath(init_path)))
+                        res.insert(0, name)
+                        init_path = os.path.join(os.path.dirname(init_path), '..', '__init__.py')
+                    else:
+                        # not a namespace package
+                        break
+            else:
+                # not a package
+                break
+        if res:
+            return os.path.join(*res)
+        else:
+            return None
+
     def _py__path__(self):
         search_path = self.evaluator.project.sys_path
         init_path = self.py__file__()
         if os.path.basename(init_path) == '__init__.py':
-            with open(init_path, 'rb') as f:
-                content = python_bytes_to_unicode(f.read(), errors='replace')
-                # these are strings that need to be used for namespace packages,
-                # the first one is ``pkgutil``, the second ``pkg_resources``.
-                options = ('declare_namespace(__name__)', 'extend_path(__path__')
-                if options[0] in content or options[1] in content:
-                    # It is a namespace, now try to find the rest of the
-                    # modules on sys_path or whatever the search_path is.
-                    paths = set()
-                    for s in search_path:
-                        other = os.path.join(s, self.name.string_name)
-                        if os.path.isdir(other):
-                            paths.add(other)
-                    if paths:
-                        return list(paths)
-                    # TODO I'm not sure if this is how nested namespace
-                    # packages work. The tests are not really good enough to
-                    # show that.
+            name = self.ns_path(unicode(self.name), init_path)
+            if name:
+                paths = set()
+                for s in search_path:
+                    other = os.path.join(s, name)
+                    if os.path.isdir(other):
+                        paths.add(other)
+                return list(paths)
         # Default to this.
         return [self._get_init_directory()]
 
