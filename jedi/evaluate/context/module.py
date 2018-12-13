@@ -2,6 +2,7 @@ import pkgutil
 import imp
 import re
 import os
+import sys
 
 from parso import python_bytes_to_unicode
 
@@ -163,7 +164,10 @@ class ModuleContext(use_metaclass(CachedMetaClass, TreeContext)):
         search_path = self.evaluator.project.sys_path
         init_path = self.py__file__()
         if os.path.basename(init_path) == '__init__.py':
-            name = self.ns_path(unicode(self.name), init_path)
+            if sys.version_info[0] >= 3:
+                name = self.ns_path(str(self.name), init_path)
+            else:
+                name = self.ns_path(unicode(self.name), init_path)
             if name:
                 paths = set()
                 for s in search_path:
